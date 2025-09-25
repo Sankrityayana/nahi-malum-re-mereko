@@ -1,107 +1,128 @@
 # Speech Practice App (Flutter + Supabase)
 
-A bilingual (Hindi + English) speech practice app with TTS, STT, gamification, and Supabase backend.
+A bilingual (Hindi + English) speech practice app with on-device TTS/STT, gamification (streaks, coins, badges), leaderboard, and a Supabase backend.
 
-## Features
-- Login/Signup via Supabase Auth
-- Practice tricky words/sentences with TTS (hi/en) and STT comparison
-- Accuracy feedback and progress saving
-- Leaderboard, streaks, and simple graphs
+• Flutter front-end with Material 3, Google Fonts, animated feedback, and friendly UX.
+• Free speech stack by default (no paid APIs): device TTS/STT, optional local recording.
+• Secure backend with Supabase Auth, RLS policies, Storage, and SQL functions.
 
-## 1) Prereqs
+---
+
+## Table of Contents
+1. Features
+2. Architecture overview
+3. Prerequisites
+4. Supabase setup (DB + policies + storage)
+5. App setup (Flutter create, dependencies, env)
+6. Run the app (Windows/Android/iOS)
+7. Speech engine notes (free options)
+8. Database schema (tables, RPCs, policies)
+9. Storage and privacy (public vs signed URLs)
+10. Testing
+11. Troubleshooting / FAQ
+12. Roadmap
+
+---
+
+## 1) Features
+- Auth: Email/password with Supabase Auth
+- Practice: random words (Hindi/English), TTS playback, on-device STT, similarity scoring, motivational feedback
+- Gamification: streaks, coins, cloud-synced stats; animated badge unlock popup
+- Leaderboard: global ranking by accumulated score
+- Profile: real progress graph, earned badges, next-badge progress hints
+- Recording: optional on-device audio capture and upload to Supabase Storage (long-press Record)
+
+---
+
+## 2) Architecture overview
+- Frontend: Flutter 3.x, Material 3 UI, Google Fonts, fl_chart for graphs
+- Speech:
+  - TTS via `flutter_tts` (device voices: hi-IN / en-IN)
+  - STT via `speech_to_text` (device speech engine)
+- Backend: Supabase (Auth, Postgres + RLS, Storage, SQL RPCs)
+- Data flow: Client reads words via an RPC, saves practice progress to Postgres, updates user_stats (streak/coins), awards badges server-side, shows unlock dialog
+
+---
+
+## 3) Prerequisites
 - Flutter 3.x (Dart SDK 3.5+)
-- Android Studio/Xcode for emulators
-- Supabase project (free tier)
+- Android Studio (Android), Xcode (iOS), or Windows Desktop
+- Supabase project (free tier): https://supabase.com
 
-## 2) Setup Supabase (free)
-1. Create a Supabase project: https://supabase.com
-2. In SQL Editor, run `supabase/schema.sql` then `supabase/seed_words.sql`.
-3. Get Project URL and anon key from Project Settings → API.
-4. Storage: create a bucket `recordings` (public or with RLS + signed URLs).
+---
 
-## 3) Create Flutter project structure (once)
-If this folder is not an initialized Flutter project yet, generate platform folders:
+## 4) Supabase setup (DB + policies + storage)
+1) Create a Supabase project (free tier).
+2) In the SQL Editor, run the SQL files in this order:
+   - `supabase/schema.sql` (creates tables, policies, RPCs)
+   - `supabase/seed_words.sql` (sample Hindi/English words)
+3) Storage: create a bucket `recordings`.
+   - For a quick start: make it public.
+   - For privacy (recommended): keep it private and use signed URLs (see Section 9).
+4) Find your Project URL and Anon Key under Settings → API.
 
-```
+---
+
+## 5) App setup (Flutter create, dependencies, env)
+If platform folders don’t exist yet, generate them once:
+
+```powershell
 flutter create .
 ```
 
-This creates `android/`, `ios/`, `web/`, `windows/`, etc. Our `lib/` and `pubspec.yaml` are already provided.
+Install dependencies:
 
-## 4) Configure Flutter app
-Set Dart defines at build time (required for `String.fromEnvironment`):
-
-Windows PowerShell examples:
-
+```powershell
+flutter pub get
 ```
+
+Provide Supabase credentials (required by `String.fromEnvironment` in `lib/main.dart`):
+
+Option A — pass defines in the run command
+
+```powershell
 flutter run -d windows --dart-define SUPABASE_URL=https://YOUR-PROJECT.supabase.co --dart-define SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
-For Android:
-```
+Android emulator example:
+
+```powershell
 flutter run -d emulator-5554 --dart-define SUPABASE_URL=https://YOUR-PROJECT.supabase.co --dart-define SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
-Alternatively, create a `.env` and use `--dart-define-from-file=.env` with contents:
-```
+Option B — use a `.env` file
+
+```env
 SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
-Then run:
-```
+
+Then:
+
+```powershell
 flutter run --dart-define-from-file=.env
 ```
 
-## 5) Install deps and run
-```
-flutter pub get
-```
-Then run as above with env vars.
+A sample file `.env.sample` is included.
 
-## 6) Speech (Free options)
-- TTS: `flutter_tts` uses platform-native voices (Android/iOS/Windows). Choose locale `hi-IN` or `en-IN`. No cloud cost.
-- STT: `speech_to_text` uses on-device speech engine where available. For best Hindi support, enable Google app/voice typing on Android. For iOS, Siri dictation.
-- If you need cloud-level accuracy for free-ish:
-  - gTTS (Text-to-Speech) is an open-source client for Google Translate TTS, not official. For demos, call in a Supabase Edge Function and cache audio. Avoid shipping keys to clients.
-  - Vosk offline STT (no cloud). Add later if needed.
+---
 
-This template defaults to free, on-device engines to avoid API costs.
+## 6) Run the app (Windows / Android / iOS)
+- Windows Desktop: use the Windows command above.
+- Android: ensure emulator microphone is enabled; grant RECORD_AUDIO permission at runtime.
+- iOS: run from Xcode or `flutter run`; ensure Info.plist contains mic + speech permissions.
 
-## 7) Edge Functions (optional)
-You can create functions in `supabase/functions` for: word selection, audio analysis, signed URL upload.
+Platform permissions:
 
-Example outline (Deno):
-```ts
-// supabase/functions/hello/index.ts
-import { serve } from "https://deno.land/std/http/server.ts";
-serve((req) => new Response(JSON.stringify({ ok: true })));
-```
-Deploy with Supabase CLI.
+Android (AndroidManifest.xml)
 
-## 8) Database
-Tables: `words`, `progress`. View+RPC: `leaderboard`, `get_leaderboard`.
-RLS enabled so users only read their own progress.
-
-## 9) Next improvements
-- Real audio capture + upload to Storage
-- More gamification (coins, badges in DB)
-- Friends leaderboard (by relationship)
-- Edge function for smarter scoring (phoneme distance)
-
-## 10) Troubleshooting & platform notes
-- If STT not returning Hindi: check device language packs. Use `hi_IN` locale.
-- Supabase 401: ensure env vars are set for this run.
-- Android mic permission: add to AndroidManifest. iOS: update Info.plist. See below.
-- Windows: `speech_to_text` is best on Android/iOS; on Windows, prefer running Android emulator or add a Windows STT plugin. TTS works on Windows via `flutter_tts`.
-
-### Android permissions
-```
+```xml
 <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 ```
-Add to `android/app/src/main/AndroidManifest.xml` within `<manifest>`.
 
-### iOS permissions (Info.plist)
-```
+iOS (Info.plist)
+
+```xml
 <key>NSSpeechRecognitionUsageDescription</key>
 <string>We use speech recognition to help you practice pronunciation.</string>
 <key>NSMicrophoneUsageDescription</key>
@@ -109,4 +130,84 @@ Add to `android/app/src/main/AndroidManifest.xml` within `<manifest>`.
 ```
 
 ---
-This is a minimal, runnable starter. Extend as needed.
+
+## 7) Speech engine notes (free options)
+- TTS: `flutter_tts` uses device/system voices; set locale to `hi-IN` (Hindi) or `en-IN` (Indian English). No keys or billing.
+- STT: `speech_to_text` uses device engine; for Hindi accuracy, install/enable Google voice typing + Hindi language pack on Android. On iOS, ensure Siri dictation is available.
+- Alternatives (optional):
+  - gTTS for TTS in a Supabase Edge Function (cache audio, don’t expose keys in the client)
+  - Vosk for offline STT
+
+---
+
+## 8) Database schema (tables, RPCs, policies)
+Core tables:
+- `words(id, text, lang, difficulty, created_at)`
+- `progress(id, user_id, word_id, target_text, score, created_at)`
+- `user_stats(user_id, streak, coins, last_practice_date)`
+- `badges(code, name, description, icon)`
+- `user_badges(user_id, badge_code, earned_at)`
+
+Views / RPCs:
+- `leaderboard` view and `get_leaderboard(limit)` RPC
+- `get_random_words(lang, limit)` RPC
+- `get_progress_stats(user)` RPC (attempts, best, last)
+- `compute_and_award_badges(user)` RPC (atomic award + returns newly unlocked badges)
+
+Policies (RLS):
+- Words readable by all
+- Progress: users can insert/select their own
+- user_stats: users can select/insert/update their own
+- badges: readable by all; user_badges: users can read/insert their own
+
+---
+
+## 9) Storage and privacy (public vs signed URLs)
+Quick start uses a public `recordings` bucket. For privacy:
+1) Make bucket private.
+2) Create a server-side route (Supabase Edge Function) to generate a signed URL for uploading/reading.
+3) In Flutter, call that function to obtain a one-time URL; upload with HTTP PUT.
+
+This keeps audio non-public and time-limited.
+
+---
+
+## 10) Testing
+Run unit tests:
+
+```powershell
+flutter test
+```
+
+Included tests:
+- `speech_similarity_test.dart`: checks scoring order
+- `gamification_service_test.dart`: streak bump smoke test
+
+---
+
+## 11) Troubleshooting / FAQ
+- STT not returning Hindi?
+  - Android: Install Hindi language pack and enable Google voice typing.
+  - Use locale `hi_IN` in the app.
+- Supabase 401 or no data?
+  - Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` are provided via `--dart-define` or `.env` file.
+  - Ensure you ran `supabase/schema.sql` and have tables with RLS policies.
+- Random words not changing?
+  - Ensure RPC `get_random_words` exists (created by `schema.sql`).
+- Storage upload fails?
+  - Confirm `recordings` bucket exists, and it’s public (for quick start) or you’re using signed URLs.
+- Windows STT?
+  - It’s limited compared to Android/iOS. Prefer running on a mobile emulator/device for best results.
+
+---
+
+## 12) Roadmap
+- Signed URLs + RLS for recordings (privacy by default)
+- Offline queue for progress and uploads
+- Dedicated Badges page and unlock feed
+- Phoneme-aware scoring via Edge Function
+- Friends leaderboard / social sharing
+
+---
+
+Made with Flutter + Supabase. Contributions and ideas are welcome.
