@@ -24,6 +24,14 @@ class _PracticeScreenState extends State<PracticeScreen> {
   String _lang = 'hi';
   String? _recognized;
   double? _score;
+  bool _isListening = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load a random word on first open
+    WidgetsBinding.instance.addPostFrameCallback((_) => _next());
+  }
 
   void _next() async {
     try {
@@ -37,6 +45,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 
   void _record() async {
+    if (_isListening) return;
+    setState(() => _isListening = true);
     final text = await _speech.listenOnce(localeId: _lang == 'hi' ? 'hi_IN' : 'en_IN');
     if (text != null) {
   // Keep Latin (A-Z) and Devanagari (U+0900–U+097F) letters + spaces
@@ -88,6 +98,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
         } catch (_) {}
       }
     }
+    if (mounted) setState(() => _isListening = false);
   }
 
   void _recordAndUpload() async {
@@ -128,16 +139,25 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 children: [
                   Text(_target, style: Theme.of(context).textTheme.headlineMedium, textAlign: TextAlign.center),
                   const SizedBox(height: 12),
-                  Wrap(spacing: 12, children: [
-                    ElevatedButton.icon(onPressed: _tts, icon: const Icon(Icons.volume_up), label: const Text('TTS')),
-                    ElevatedButton.icon(
+                  Wrap(spacing: 12, runSpacing: 8, alignment: WrapAlignment.center, children: [
+                    ElevatedButton.icon(onPressed: _tts, icon: const Icon(Icons.volume_up), label: const Text('Listen')),
+                    FilledButton.icon(
                       onPressed: _record,
                       onLongPress: _recordAndUpload,
-                      icon: const Icon(Icons.mic),
-                      label: const Text('Record'),
+                      icon: Icon(_isListening ? Icons.hearing : Icons.mic),
+                      label: Text(_isListening ? 'Listening…' : 'Record'),
                     ),
                     OutlinedButton.icon(onPressed: _next, icon: const Icon(Icons.shuffle), label: const Text('Random')),
-                  ])
+                  ]),
+                  const SizedBox(height: 16),
+                  if (_score != null)
+                    _AccuracyRing(score: _score!.clamp(0, 100).toDouble()),
+                  if (_score != null) const SizedBox(height: 8),
+                  if (_score != null)
+                    Text(
+                      _score! >= 80 ? 'Shabash! Great job.' : (_score! >= 60 ? 'Getting there! Try once more.' : 'Keep practicing, you’ve got this!'),
+                      style: TextStyle(color: _score! >= 80 ? Colors.green : (_score! >= 60 ? Colors.orange : Colors.red)),
+                    )
                 ],
               ),
             ),
@@ -152,6 +172,32 @@ class _PracticeScreenState extends State<PracticeScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _AccuracyRing extends StatelessWidget {
+  final double score; // 0-100
+  const _AccuracyRing({required this.score});
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (score / 100).clamp(0.0, 1.0);
+    final color = score >= 80 ? Colors.green : (score >= 60 ? Colors.orange : Colors.red);
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 400),
+      tween: Tween(begin: 0, end: pct),
+      builder: (context, v, _) => SizedBox(
+        width: 110,
+        height: 110,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            CircularProgressIndicator(value: v, strokeWidth: 10, color: color, backgroundColor: Colors.grey.shade300),
+            Text('${score.toStringAsFixed(0)}%'),
+          ],
+        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -29,8 +30,10 @@ class MyApp extends StatelessWidget {
         title: 'Speech Practice',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
           useMaterial3: true,
+          textTheme: GoogleFonts.interTextTheme(),
+          snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
         ),
         supportedLocales: const [
           Locale('en'),
