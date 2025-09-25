@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/speech_service.dart';
@@ -25,19 +29,78 @@ class _PracticeScreenState extends State<PracticeScreen> {
   String? _recognized;
   double? _score;
   bool _isListening = false;
+  List<String>? _hindiCache;
+  final Random _rng = Random();
 
   @override
   void initState() {
     super.initState();
     // Load a random word on first open
-    WidgetsBinding.instance.addPostFrameCallback((_) => _next());
+    WidgetsBinding.instance.addPostFrameCallback((_) => getNextWord());
   }
 
-  void _next() async {
+  Future<void> getNextWord() async {
     try {
-      final list = await _db.getRandomWords(limit: 1, lang: _lang);
-      if (list.isNotEmpty) setState(() { _target = list.first['text']; _wordId = list.first['id']; });
-    } catch (_) {}
+      String next;
+      if (_lang == 'en') {
+        next = await _fetchRandomEnglish();
+      } else {
+        next = await _fetchRandomHindi();
+      }
+      if (!mounted) return;
+      setState(() {
+        _target = next;
+        _wordId = null; // Not from DB when using API/asset
+        _recognized = null;
+        _score = null;
+      });
+    } catch (e) {
+      // Fallback to Supabase words if API/asset fails
+      try {
+        final list = await _db.getRandomWords(limit: 1, lang: _lang);
+        if (!mounted) return;
+        if (list.isNotEmpty) {
+          setState(() {
+            _target = list.first['text'];
+            _wordId = list.first['id'];
+            _recognized = null;
+            _score = null;
+          });
+        }
+      } catch (_) {}
+    }
+  }
+
+  // Backwards alias to keep intent explicit
+  Future<void> _next() => getNextWord();
+
+  Future<String> _fetchRandomEnglish() async {
+    final uri = Uri.parse('https://random-word-api.herokuapp.com/word');
+    final res = await http.get(uri).timeout(const Duration(seconds: 8));
+    if (res.statusCode == 200) {
+      final body = jsonDecode(res.body);
+      if (body is List && body.isNotEmpty) {
+        final w = (body.first ?? '').toString();
+        if (w.trim().isNotEmpty) return w.trim();
+      }
+    }
+    throw Exception('Failed to fetch English word');
+  }
+
+  Future<String> _fetchRandomHindi() async {
+    _hindiCache ??= await _loadHindiWords();
+    if (_hindiCache!.isEmpty) throw Exception('No Hindi words in asset');
+    final idx = _rng.nextInt(_hindiCache!.length);
+    return _hindiCache![idx];
+  }
+
+  Future<List<String>> _loadHindiWords() async {
+    final raw = await rootBundle.loadString('assets/hindi_words.json');
+    final data = jsonDecode(raw);
+    if (data is List) {
+      return data.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
+    }
+    return [];
   }
 
   void _tts() async {
@@ -99,6 +162,13 @@ class _PracticeScreenState extends State<PracticeScreen> {
       }
     }
     if (mounted) setState(() => _isListening = false);
+
+    // Auto-advance to next word shortly after showing the result
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted && !_isListening) {
+        getNextWord();
+      }
+    });
   }
 
   void _recordAndUpload() async {
@@ -129,7 +199,10 @@ class _PracticeScreenState extends State<PracticeScreen> {
               ButtonSegment(value: 'en', label: Text('English')),
             ],
             selected: {_lang},
-            onSelectionChanged: (s) => setState(() => _lang = s.first),
+            onSelectionChanged: (s) {
+              setState(() => _lang = s.first);
+              getNextWord();
+            },
           ),
           const SizedBox(height: 24),
           Card(
@@ -147,7 +220,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                       icon: Icon(_isListening ? Icons.hearing : Icons.mic),
                       label: Text(_isListening ? 'Listening…' : 'Record'),
                     ),
-                    OutlinedButton.icon(onPressed: _next, icon: const Icon(Icons.shuffle), label: const Text('Random')),
+                    OutlinedButton.icon(onPressed: getNextWord, icon: const Icon(Icons.shuffle), label: const Text('Random')),
                   ]),
                   const SizedBox(height: 16),
                   if (_score != null)

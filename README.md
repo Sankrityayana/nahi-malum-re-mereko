@@ -27,6 +27,7 @@ A bilingual (Hindi + English) speech practice app with on-device TTS/STT, gamifi
 ## 1) Features
 - Auth: Email/password with Supabase Auth
 - Practice: random words (Hindi/English), TTS playback, on-device STT, similarity scoring, motivational feedback
+- Auto-advance to next word after showing accuracy (no getting stuck)
 - Gamification: streaks, coins, cloud-synced stats; animated badge unlock popup
 - Leaderboard: global ranking by accumulated score
 - Profile: real progress graph, earned badges, next-badge progress hints
@@ -41,6 +42,11 @@ A bilingual (Hindi + English) speech practice app with on-device TTS/STT, gamifi
   - STT via `speech_to_text` (device speech engine)
 - Backend: Supabase (Auth, Postgres + RLS, Storage, SQL RPCs)
 - Data flow: Client reads words via an RPC, saves practice progress to Postgres, updates user_stats (streak/coins), awards badges server-side, shows unlock dialog
+
+Random word sources:
+- English: public API https://random-word-api.herokuapp.com/word (free)
+- Hindi: local asset list `assets/hindi_words.json` (bundled)
+The app automatically selects the correct source by the chosen language.
 
 ---
 
@@ -104,6 +110,11 @@ flutter run --dart-define-from-file=.env
 ```
 
 A sample file `.env.sample` is included.
+
+Assets
+
+- The app bundles a Hindi words file at `assets/hindi_words.json` and is already registered in `pubspec.yaml`.
+- If you change or add assets, run `flutter pub get` again and restart the app.
 
 ---
 
@@ -193,11 +204,18 @@ Included tests:
   - Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` are provided via `--dart-define` or `.env` file.
   - Ensure you ran `supabase/schema.sql` and have tables with RLS policies.
 - Random words not changing?
-  - Ensure RPC `get_random_words` exists (created by `schema.sql`).
+  - English uses the public API; check your network access.
+  - Hindi uses `assets/hindi_words.json`; make sure the asset exists and is listed in `pubspec.yaml`.
+  - If both fail, the app falls back to Supabase RPC `get_random_words`.
 - Storage upload fails?
   - Confirm `recordings` bucket exists, and it’s public (for quick start) or you’re using signed URLs.
 - Windows STT?
   - It’s limited compared to Android/iOS. Prefer running on a mobile emulator/device for best results.
+
+- Leaderboard shows spinner forever?
+  - The app first tries `/api/leaderboard` (on web it uses the current origin).
+  - If unavailable, it falls back to Supabase RPC `get_leaderboard`.
+  - Ensure your API route exists in your hosting setup, or rely on the Supabase fallback.
 
 ---
 
@@ -207,6 +225,7 @@ Included tests:
 - Dedicated Badges page and unlock feed
 - Phoneme-aware scoring via Edge Function
 - Friends leaderboard / social sharing
+ - Configurable API base URL for `/api/leaderboard` on mobile/desktop
 
 ---
 
